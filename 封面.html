@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>愁緒入墨：老前輩的跨時空掛號處</title>
+    <style>
+        /* 1. 視覺風格：仿古宣紙質感 */
+        :root {
+            --paper-bg: #f7f3ed;
+            --paper-dark: #e2d9c8;
+            --ink-black: #1a1a1a;
+            --cinnabar-red: #a62c2b;
+            --seal-gold: #d4af37;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #222;
+            font-family: "PingFang TC", "Noto Serif TC", "Microsoft JhengHei", serif;
+        }
+
+        /* 2. 數位卷軸展開動畫 */
+        .scroll-container {
+            position: relative;
+            width: 90vw;
+            height: 80vh;
+            margin: 10vh auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background: var(--paper-bg);
+            /* 模擬宣紙微細紋理 */
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(255,255,255,0.5) 0%, transparent 100%),
+                url("https://www.transparenttextures.com/patterns/natural-paper.png");
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            animation: scrollOpen 2.5s cubic-bezier(0.645, 0.045, 0.355, 1) forwards;
+            transform-origin: center;
+        }
+
+        @keyframes scrollOpen {
+            0% { width: 0; opacity: 0; }
+            100% { width: 90vw; opacity: 1; }
+        }
+
+        /* 卷軸軸柱 */
+        .roller {
+            position: absolute;
+            top: -5%;
+            width: 30px;
+            height: 110%;
+            background: linear-gradient(to right, #4a3b2b, #7d634d, #4a3b2b);
+            border-radius: 5px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+            z-index: 20;
+        }
+        .roller-left { left: 0; }
+        .roller-right { right: 0; }
+
+        /* Canvas 層 */
+        #canvas-stage {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 5;
+            cursor: crosshair;
+        }
+
+        /* UI 文字層 */
+        .ui-overlay {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            pointer-events: none; /* 讓點擊穿透到 Canvas */
+            opacity: 0;
+            transition: opacity 2s ease;
+        }
+
+        .ui-overlay.visible {
+            opacity: 1;
+        }
+
+        h1 {
+            color: var(--ink-black);
+            font-size: 2.8rem;
+            letter-spacing: 0.5rem;
+            margin-bottom: 1rem;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+
+        p {
+            color: var(--ink-black);
+            font-size: 1.1rem;
+            line-height: 1.8;
+            max-width: 600px;
+            margin: 0 auto 2rem;
+            filter: opacity(0.8);
+        }
+
+        /* 3. 互動按鈕：東方印章樣式 */
+        .seal-button {
+            display: inline-block;
+            padding: 15px 25px;
+            background-color: var(--cinnabar-red);
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1.4rem;
+            border: 3px solid var(--cinnabar-red);
+            position: relative;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: all 0.2s;
+            box-shadow: 3px 3px 0px rgba(0,0,0,0.2);
+            /* 篆刻字體感 */
+            writing-mode: vertical-rl;
+            text-orientation: upright;
+            letter-spacing: 5px;
+        }
+
+        .seal-button:hover {
+            transform: scale(1.05);
+            box-shadow: 5px 5px 15px rgba(166, 44, 43, 0.4);
+            filter: brightness(1.1);
+        }
+
+        .seal-button:active {
+            transform: scale(0.9);
+            filter: contrast(1.2);
+        }
+
+        /* 墨跡滿版轉場動畫 */
+        .ink-transition {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--ink-black);
+            z-index: 100;
+            clip-path: circle(0% at 50% 50%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 2rem;
+            transition: clip-path 1.5s ease-in;
+            pointer-events: none;
+        }
+
+        .ink-transition.active {
+            clip-path: circle(150% at 50% 50%);
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="scroll-container">
+        <div class="roller roller-left"></div>
+        <canvas id="canvas-stage"></canvas>
+        
+        <div class="ui-overlay" id="ui">
+            <h1>愁緒入墨</h1>
+            <p>老前輩的跨時空掛號處</p>
+            <p style="font-size: 0.9rem;">從故宮文物看古人的焦慮世界。這是一份來自老前輩的備忘錄，請在進入診間前，先量測您的心境溫度。</p>
+            
+            <div class="seal-button" id="start-btn">開始掛號</div>
+        </div>
+        
+        <div class="roller roller-right"></div>
+    </div>
+
+    <div class="ink-transition" id="transition-mask">
+        進入 BSRS-5 測驗主體...
+    </div>
+
+    <script>
+        /**
+         * 1. 基礎設定與畫布初始化
+         */
+        const canvas = document.getElementById('canvas-stage');
+        const ctx = canvas.getContext('2d');
+        const ui = document.getElementById('ui');
+        let width, height;
+
+        function resize() {
+            width = canvas.width = window.innerWidth * 0.9;
+            height = canvas.height = window.innerHeight * 0.8;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        /**
+         * 2. 核心意象：雕橄欖核舟
+         * 繪製一個簡約的核舟剪影，並實作浮沉效果
+         */
+        const boat = {
+            x: 0,
+            y: 0,
+            targetY: 0,
+            angle: 0,
+            draw() {
+                this.x = width / 2;
+                this.targetY = height / 2 + Math.sin(this.angle) * 15; // 上下浮動
+                this.angle += 0.02;
+
+                ctx.save();
+                ctx.translate(this.x, this.targetY);
+                // 輕微晃動
+                ctx.rotate(Math.sin(this.angle * 0.5) * 0.03);
+
+                // 繪製簡約核舟線條
+                ctx.beginPath();
+                ctx.moveTo(-60, 0);
+                ctx.bezierCurveTo(-40, 25, 40, 25, 60, 0); // 船底
+                ctx.bezierCurveTo(40, -15, -40, -15, -60, 0); // 船舷
+                ctx.fillStyle = "rgba(26, 26, 26, 0.8)";
+                ctx.fill();
+                
+                // 船上的小窗裝飾線
+                ctx.strokeStyle = "rgba(247, 243, 237, 0.5)";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(-15, -8, 10, 8);
+                ctx.strokeRect(5, -8, 10, 8);
+                
+                ctx.restore();
+            }
+        };
+
+        /**
+         * 3. 墨滴擴散粒子系統
+         */
+        const particles = [];
+        class InkDrop {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 5 + 2;
+                this.maxSize = Math.random() * 80 + 40;
+                this.opacity = 0.6;
+                this.life = 1;
+            }
+            update() {
+                if (this.size < this.maxSize) this.size += 0.8;
+                this.opacity -= 0.005;
+                this.life -= 0.005;
+            }
+            draw() {
+                ctx.save();
+                ctx.beginPath();
+                ctx.globalAlpha = this.opacity;
+                ctx.fillStyle = '#1a1a1a';
+                // 模擬不規則墨漬
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        /**
+         * 4. Web Audio API：模擬音效
+         */
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playStampSound() {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.2);
+        }
+
+        function playAmbientSound() {
+            // 低頻噪聲模擬風聲/水流
+            const bufferSize = 2 * audioCtx.sampleRate;
+            const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                output[i] = Math.random() * 2 - 1;
+            }
+            const whiteNoise = audioCtx.createBufferSource();
+            whiteNoise.buffer = noiseBuffer;
+            whiteNoise.loop = true;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 400;
+
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0.05;
+
+            whiteNoise.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            whiteNoise.start();
+        }
+
+        /**
+         * 5. 互動事件監聽
+         */
+        let firstClick = true;
+        canvas.addEventListener('mousedown', (e) => {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+                playAmbientSound();
+            }
+            
+            // 產生墨滴
+            for(let i=0; i<3; i++) {
+                particles.push(new InkDrop(e.offsetX, e.offsetY));
+            }
+            
+            if (firstClick) {
+                ui.classList.add('visible');
+                firstClick = false;
+            }
+        });
+
+        // 偵測滾輪模擬卷軸聲音邏輯
+        let scrollTimeout;
+        window.addEventListener('wheel', () => {
+            if (!scrollTimeout) {
+                // 這裡可以播放微弱的紙張磨擦聲
+                console.log("Scroll logic detected...");
+            }
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => { scrollTimeout = null; }, 100);
+        });
+
+        const startBtn = document.getElementById('start-btn');
+        const transitionMask = document.getElementById('transition-mask');
+
+        startBtn.addEventListener('click', () => {
+            playStampSound();
+            transitionMask.classList.add('active');
+            setTimeout(() => {
+                // 這裡導向下一頁或更換內容
+                console.log("導向 BSRS-5 測驗頁面...");
+            }, 1600);
+        });
+
+        /**
+         * 6. 主循環動畫
+         */
+        function animate() {
+            // 每一影格留下一點點上一幀的顏色，產生殘影感
+            ctx.fillStyle = 'rgba(247, 243, 237, 0.2)';
+            ctx.fillRect(0, 0, width, height);
+
+            // 繪製核舟
+            boat.draw();
+
+            // 更新並繪製粒子
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].life <= 0) particles.splice(i, 1);
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
